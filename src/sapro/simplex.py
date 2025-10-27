@@ -653,15 +653,16 @@ class Simplex:
             if leave_index is None:
                 break
             leave_var = self.base_vars[leave_index]
-            if (data[leave_index] >= 0).all():
+            enterable = data[leave_index] < 0
+            if not enterable.any():
                 raise Unsolvable(f'cannot make "{leave_var}" leave base')
             with np.errstate(divide='ignore'):
                 ratios = np.where(
-                    data[leave_index] >= 0,
+                    enterable,
+                    sigma / data[leave_index],
                     np.inf,
-                    sigma / data[leave_index]
                 )
-            enter_index = np.argmin(ratios)
+            enter_index = np.argmin(np.abs(ratios))
             rhs[leave_index] /= data[leave_index][enter_index]
             data[leave_index] /= data[leave_index][enter_index]
             for i in range(M):
