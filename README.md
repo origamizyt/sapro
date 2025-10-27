@@ -101,6 +101,7 @@ The right hand side of a constraint **must** be a single number. Only operators 
 To define a LP problem, use the `Simplex` class.
 
 Here is a simple LP problem. You can probably answer it in your head:
+
 $$
 \begin{aligned}
 \max \space & x_1 + 2x_2 \\
