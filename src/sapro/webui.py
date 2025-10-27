@@ -4,7 +4,6 @@ from .simplex import *
 from .tableau import Tableau
 from .utils import *
 from wsgiref.simple_server import make_server
-from wsgiref.types import WSGIEnvironment, StartResponse
 from wsgiref.util import FileWrapper
 from http import HTTPStatus
 import os
@@ -86,7 +85,7 @@ class SolveResult:
 def _http_status_line(status: HTTPStatus):
     return '{} {}'.format(int(status), status.phrase)
 
-def application(environ: WSGIEnvironment, start_response: StartResponse):
+def application(environ, start_response):
     '''
     WSGI application of the server.
     '''
