@@ -238,7 +238,7 @@ class Simplex:
         return self.display()
     def __repr__(self):
         return 'Simplex({}, {})'.format(len(self.variables), len(self.constraints))
-    def _select_entering_var(self, sigma: np.ndarray, arbitrary: bool) -> int | None:
+    def _select_entering_var(self, sigma: np.ndarray, maximize: bool) -> int | None:
         '''
         Selects a variable to become base.
 
@@ -255,12 +255,10 @@ class Simplex:
         index:
             Index of the selected variable. `None` if none available.
         '''
-        if self.maximize:
+        if maximize:
             candidates = (sigma > 0).nonzero()[0]
         else:
             candidates = (sigma < 0).nonzero()[0]
-        if candidates.shape[0] == 0 and arbitrary:
-            candidates = (sigma != 0).nonzero()[0]
         return candidates[0] if candidates.shape[0] > 0 else None
     def _select_leaving_var(self, rhs: np.ndarray) -> int | None:
         '''
@@ -309,6 +307,8 @@ class Simplex:
         self.canonicalize()
         # check variables
         M = len(self.constraints)
+        if M <= 0:
+            raise Unsolvable('constraints is empty')
         if self.base_vars is None:
             if self._num_slack_vars == M:
                 self.base_vars = self.variables[-M:]
@@ -462,8 +462,8 @@ class Simplex:
         base_var_memo.add(frozenset(base_vars))
 
         # algorithm step
-        while (sigma[-M:] == 0).any():
-            enter_index = self._select_entering_var(sigma[:-M], True)
+        while True:
+            enter_index = self._select_entering_var(sigma[:-M], False)
             if enter_index is None:
                 break
             with np.errstate(divide='ignore'):
@@ -504,7 +504,7 @@ class Simplex:
 
             base_var_set = frozenset(base_vars)
             if base_var_set in base_var_memo:
-                raise Unsolvable("encountered cycle in simplex")
+                raise Boundless("encountered cycle in simplex")
             base_var_memo.add(base_var_set)
         
         if (rhs < 0).any():
@@ -603,7 +603,7 @@ class Simplex:
 
         # algorithm step
         while True:
-            enter_index = self._select_entering_var(sigma, False)
+            enter_index = self._select_entering_var(sigma, self.maximize)
             if enter_index is None:
                 break
             with np.errstate(divide='ignore'):
@@ -644,7 +644,7 @@ class Simplex:
 
             base_var_set = frozenset(self.base_vars)
             if base_var_set in base_var_memo:
-                raise Unsolvable("encountered cycle in simplex")
+                raise Boundless("encountered cycle in simplex")
             base_var_memo.add(base_var_set)
 
         base_var_memo.clear()
@@ -692,7 +692,7 @@ class Simplex:
 
             base_var_set = frozenset(self.base_vars)
             if base_var_set in base_var_memo:
-                raise Unsolvable("encountered cycle in simplex")
+                raise Boundless("encountered cycle in simplex")
             base_var_memo.add(base_var_set)
         
         var_values = dict.fromkeys(self.variables, 0)

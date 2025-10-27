@@ -12,3 +12,6 @@ class BaseAlreadySet(LPError):
 
 class Unsolvable(LPError):
     'A LP problem has no solution.'
+
+class Boundless(LPError):
+    'A LP problem has an unbounded solution.'

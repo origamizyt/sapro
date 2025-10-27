@@ -1,6 +1,6 @@
 [project]
 name = "sapro"
-version = "0.1.0"
+version = "0.2.0a1"
 description = "Solve linear programming problems using simplex algorithm."
 readme = "README.md"
 authors = [
@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "numpy>=2.3.4",
+    "numpy",
 ]
 
 [project.urls]

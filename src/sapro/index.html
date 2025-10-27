@@ -530,7 +530,7 @@
                   <span v-html="renderServerVariableList(result.bestResult.baseVariables)"></span>
                 </p>
                 <p class="text-lg font-light text-error/50" v-if="!result.ok">
-                  Error: {{ result.error }}
+                  Error({{ result.error.type }}): {{ result.error.message }}
                 </p>
               </div>
             </div>

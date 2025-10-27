@@ -26,6 +26,12 @@ def _constraint_encoder(value: Constraint, *_):
         'operator': value.operator
     }
 
+def _lperror_encoder(value: LPError, *_):
+    return {
+        'message': str(value),
+        'type': type(value).__name__
+    }
+
 def _tableau_encoder(value: Tableau, *_):
     return value.to_frame()
 
@@ -69,7 +75,7 @@ class SolveResult:
     Result sent to client in POST request.
     '''
     ok: bool
-    error: str | None
+    error: LPError | None
     slack_variable_count: int | None
     canonical_constraints: list[Constraint] | None
     two_phase_steps: list[LPStep] | None
@@ -149,7 +155,7 @@ def application(environ: WSGIEnvironment, start_response: StartResponse):
         result.best_result = problem.result
     except LPError as e:
         result.ok = False
-        result.error = str(e)
+        result.error = e
     
     start_response(_http_status_line(HTTPStatus.OK), [
         ('Content-Type', 'application/json')
@@ -171,6 +177,7 @@ def run_app(host: str = '0.0.0.0', port: int = 80):
     JSONConverter.register(Expression, encoder=_expression_encoder)
     JSONConverter.register(Constraint, encoder=_constraint_encoder)
     JSONConverter.register(Tableau, encoder=_tableau_encoder)
+    JSONConverter.register(LPError, encoder=_lperror_encoder, register_subclasses=True)
     Parcelable.mark_dataclass(LPStep)
     Parcelable.mark_dataclass(LPResult, 
                               formatted_target_value=str,
