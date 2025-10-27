@@ -1,8 +1,14 @@
 from io import StringIO
 from string import ascii_uppercase
-from typing import Any, Callable, Mapping, NotRequired, Required, TypeVar
+from typing import Any, Callable, Mapping, TypeVar
 from types import GenericAlias, UnionType, NoneType
 import json, re
+
+try:
+    from typing import NotRequired, Required
+    _supports_Required = True
+except ImportError:
+    _supports_Required = False
 
 __all__ = ['Transform', 'DataParcel', 'Parcelable', 'JSONConverter', 'parse_variable']
 
@@ -223,6 +229,8 @@ class Parcelable:
             See `JSONConverter.register`.
         '''
         def encoder(value, encoders):
+            if not _supports_Required:
+                return DataParcel(klass.__name__, klass.__annotations__, value).to_dict(encoders)
             d = {}
             types = {}
             for name, value_type in klass.__annotations__.items():
@@ -242,6 +250,8 @@ class Parcelable:
                     types[name] = value_type
             return DataParcel(klass.__name__, klass.__annotations__, value).to_dict(encoders)
         def decoder(value, decoders):
+            if not _supports_Required:
+                return DataParcel.from_dict(klass.__name__, klass.__annotations__, value, decoders)
             d = {}
             types = {}
             for name, value_type in klass.__annotations__.items():
