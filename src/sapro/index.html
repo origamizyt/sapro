@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html data-theme="dark" lang="en" class="overflow-hidden">
+  <head>
+    <title>Simplex Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- daisy UI & tailwind -->
+    <link href="https://unpkg.com/daisyui@5/daisyui.css" rel="stylesheet" type="text/css"/>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+
+    <!-- KaTeX -->
+    <link href="https://unpkg.com/katex/dist/katex.min.css" rel="stylesheet" type="text/css"/>
+    <script src="https://unpkg.com/katex/dist/katex.min.js"></script>
+
+    <!-- don't request /favicon.ico -->
+    <link rel="icon" href="data:image/ico;base64,aWNv"/>
+
+    <style>
+      :root {
+        --font-sans: 'inter', sans-serif;
+      }
+    </style>
+    <script>
+      const fraction = Symbol.for('fraction');
+      const Sapro = {
+        parseFloat(s) {
+          // handle fraction
+          if (s.includes('/')) {
+            const parts = s.split('/');
+            if (parts.length === 2) {
+              const numerator = parseFloat(parts[0]);
+              const denominator = parseFloat(parts[1]);
+              const num = new Number(numerator / denominator);
+              num[fraction] = [numerator, denominator];
+              return num;
+            }
+            return NaN;
+          }
+          else {
+            return parseFloat(s);
+          }
+        },
+        parseConstraint(s) {
+          let parts, operator;
+          if (s.includes("<=")) {
+            parts = s.split(/\s*<=\s*/);
+            operator = '<=';
+          }
+          else if (s.includes('==')) {
+            parts = s.split(/\s*==\s*/);
+            operator = '==';
+          }
+          else if (s.includes('>=')) {
+            parts = s.split(/\s*>=\s*/);
+            operator = '>=';
+          }
+          else {
+            throw new Error("missing operator");
+          }
+          if (parts.length > 2) {
+            throw new Error('multiple operators');
+          }
+          const rhs = this.parseFloat(parts[1].trim());
+          if (isNaN(rhs)) {
+            throw new Error(`invalid rhs value: ${parts[1].trim()}`);
+          }
+          const { coefs, vars } = this.parseExpression(parts[0]);
+          return {
+            constraint: {
+              coefficients: coefs,
+              rhs,
+              operator
+            },
+            vars
+          }
+        },
+        parseExpression(s) {
+          const coefs = {};
+          const vars = {};
+          s = s.trim();
+          if (!s.length) {
+            throw new Error('empty expression');
+          }
+          s.split(/\s*\+\s*/).forEach((addPart, outerIndex) => {
+            addPart.split(/\s*\-\s*/).forEach((part, index) => {
+              if (index === 0) {
+                if (part.length === 0 && outerIndex == 0){
+                  // leading "+/-", fine.
+                  return;
+                }
+                const parsed = this.parseExprItem(part);
+                coefs[parsed.varName] = parsed.coef;
+                vars[parsed.varName] = parsed.var;
+              }
+              else {
+                const parsed = this.parseExprItem(part);
+                coefs[parsed.varName] = -parsed.coef;
+                vars[parsed.varName] = parsed.var;
+              }
+            })
+          });
+          return {
+            coefs,
+            vars
+          }
+        },
+        parseExprItem(s) {
+          s = s.trim();
+          const parts = s.split(/\s*\*\s*/);
+          if (parts.length == 1) {
+            return {
+              coef: 1,
+              varName: parts[0],
+              var: this.parseVariable(parts[0])
+            };
+          }
+          else if (parts.length == 2) {
+            const coef = this.parseFloat(parts[0]);
+            if (!isNaN(coef)) {
+              return {
+                coef,
+                varName: parts[1],
+                var: this.parseVariable(parts[1])
+              };
+            }
+          }
+          throw new Error(`invalid expression "${s}"`);
+        },
+        parseVariable(s) {
+          s = s.trim();
+          const match = /^([a-zA-Z]+)(\d*)$/.exec(s);
+          if (match) {
+            let index = null;
+            if (match[2].length) {
+              index = parseInt(match[2]);
+            }
+            if (!isNaN(index)) {
+              return {
+                prefix: match[1],
+                index
+              };
+            }
+          }
+          throw new Error(`invalid variable "${s}"`);
+        },
+        parseVariableList(s) {
+          s = s.trim();
+          const parts = s.split(',');
+          return {
+            raw: parts.map(part => part.trim()),
+            vars: parts.map(part => this.parseVariable(part))
+          }
+        },
+        renderKatexExpression(coefs, vars, max) {
+          let s = "";
+          Object.entries(coefs).forEach(([varName, coef], varIndex) => {
+            coef = this.formatKatexCoefficient(coef, varIndex === 0);
+            s += `${coef} ${this.renderKatexVariable(vars[varName])}`;
+          })
+          return (max === undefined ? '' : max ? '\\max \\space ' : '\\min \\space ') + s.trimEnd();
+        },
+        renderKatexConstraint(constraint, vars) {
+          let s = this.renderKatexExpression(constraint.coefficients, vars) + ' ';
+          switch (constraint.operator) {
+            case '==':
+              s += '=';
+              break;
+            case '<=':
+              s += '\\le';
+              break;
+            case '>=':
+              s += '\\ge';
+              break;
+          }
+          s += ' ';
+          if (Object.hasOwn(constraint.rhs, fraction)) {
+            let [num, denom] = constraint.rhs[fraction];
+            if (constraint.rhs < 0) {
+              s += `-\\frac{${Math.abs(num)}}${Math.abs(denom)}`
+            }
+            else {
+              s += `\\frac{${Math.abs(num)}}${Math.abs(denom)}`
+            }
+          }
+          else {
+            s += `${constraint.rhs}`;
+          }
+          return s;
+        },
+        formatKatexCoefficient(coef, first) {
+          let coefString = `${coef}`;
+          if (Object.hasOwn(coef, fraction)) {
+            let [num, denom] = coef[fraction];
+            if (coef < 0) {
+              coefString = `-\\frac{${Math.abs(num)}}${Math.abs(denom)}`;
+            }
+            else {
+              coefString = `\\frac{${Math.abs(num)}}${Math.abs(denom)}`;
+            }
+          }
+          if (coef === 1) {
+            if (first) {
+              return "";
+            }
+            return "+";
+          }
+          if (coef === -1) {
+            return "-";
+          }
+          if (coef > 0 && !first) {
+            return `+${coefString}`;
+          }
+          return `${coefString}`;
+        },
+        renderKatexVariable({ prefix, index }) {
+          if (index === null) {
+            return `${prefix}`;
+          }
+          else {
+            return `${prefix}_${index}`;
+          }
+        },
+        renderKatexVariableList(vars) {
+          let s = '';
+          for (const v of vars) {
+            s += this.renderKatexVariable(v) + ', ';
+          }
+          return s.slice(0, -2);
+        },
+        renderKatexCell(value) {
+          if (value[0] === '-') {
+            return '-' + this.renderKatexCell(value.slice(1));
+          }
+          if (value.includes('/')) {
+            // fraction
+            const parts = value.split('/');
+            return `\\frac{${parts[0]}}{${parts[1]}}`;
+          }
+          return value;
+        },
+        renderKatexTableau(tableau) {
+          let m = tableau.length - 2; // BV, ...m, RHS
+          let n = tableau[0].length - 2; // VARS, ...n, SIGMA
+          let s = '\\begin{array}{|c|'
+          s += 'c'.repeat(n);
+          s += '|c|}\n';
+          s += '\\hline\n';
+          s += tableau[0].map((value, index, array) => {
+            if (index === 0 || index === array.length - 1) {
+              return `\\text{${value}}`
+            }
+            return this.renderKatexVariable(this.parseVariable(value));
+          }).join(' & ');
+          s += '\\\\\n'
+          s += '\\hline\n';
+          s += tableau.slice(1, -1).map(row => {
+            return row.map((value, index, array) => {
+              if (index === 0) {
+                return this.renderKatexVariable(this.parseVariable(value));
+              }
+              return this.renderKatexCell(value);
+            }).join(' & ');
+          }).join('\\\\\n');
+          s += '\\\\\n';
+          s += '\\hline\n';
+          s += tableau[tableau.length-1].map((value, index, array) => {
+            if (index === 0) {
+              return `\\text{${value}}`
+            }
+            else if (index === array.length - 1) {
+              return value;
+            }
+            return this.renderKatexCell(value);
+          }).join(' & ');
+          s += '\\\\\n';
+          s += '\\hline\n';
+          s += '\\end{array}'
+          return s;
+        },
+        renderTypstTableau(tableau) {
+          let m = tableau.length - 2; // BV, ...m, RHS
+          let n = tableau[0].length - 2; // VARS, ...n, SIGMA
+          let s = 
+            `#table(\n` +
+            `  columns: ${n},\n` +
+            `  table.header(`;
+          s += tableau[0].map((value, index, array) => {
+            if (index === 0 || index === array.length - 1) {
+              return `[${value}]`
+            }
+            return `[$${this.renderKatexVariable(this.parseVariable(value))}$]`;
+          }).join(", ");
+          s += '),\n  ';
+          s += tableau.slice(1, -1).map(row => {
+            return row.map((value, index, array) => {
+              if (index === 0) {
+                return `[$${this.renderKatexVariable(this.parseVariable(value))}$]`;
+              }
+              return `[$${value}$]`;
+            }).join(', ');
+          }).join(',\n  ');
+          s += ',\n  ';
+          s += tableau[tableau.length-1].map((value, index, array) => {
+            return `[$${value}$]`;
+          }).join(', ');
+          s += '\n)';
+          return s;
+        },
+        renderHTMLTableau(tableau) {
+          let m = tableau.length - 2; // BV, ...m, RHS
+          let n = tableau[0].length - 2; // VARS, ...n, SIGMA
+          let s = `<table class="table table-zebra"><thead><tr>`
+          tableau[0].forEach((value, index, array) => {
+            if (index === 0 || index === array.length - 1) {
+              s += `<th class="rounded-box">${value}</th>`
+            }
+            else {
+              const expr = this.renderKatexVariable(this.parseVariable(value));
+              s += `<th>${katex.renderToString(expr)}</th>`;
+            }
+          });
+          s += '</tr></thead><tbody>'
+          tableau.slice(1, -1).forEach(row => {
+            s += '<tr>'
+            row.forEach((value, index, array) => {
+              if (index === 0) {
+                const expr = this.renderKatexVariable(this.parseVariable(value));
+                s += `<td>${katex.renderToString(expr)}</td>`;
+              }
+              else {
+                const expr = this.renderKatexCell(value);
+                s += `<td>${katex.renderToString(expr)}</td>`;
+              }
+            })
+            s += '</tr>'
+          })
+          s += '<tr>'
+          tableau[tableau.length-1].forEach((value, index, array) => {
+            if (index === 0) {
+              s += `<td class="rounded-box">${value}</td>`
+            }
+            else if (index === array.length - 1) {
+              s += `<td class="rounded-box">${katex.renderToString(value)}</td>`;
+            }
+            else {
+              const expr = this.renderKatexCell(value);
+              s += `<td>${katex.renderToString(expr)}</td>`;
+            }
+          });
+          s += '</tr></tbody></table>'
+          return s;
+        },
+        renderKatexResult(result) {
+          let s = `z = ${this.renderKatexCell(result.formattedTargetValue)} \\kern{.5em} \\text{when} \\kern{.5em}`;
+          Object.entries(result.formattedVariableValues).forEach(([varName, value], index, array) => {
+            const v = this.renderKatexVariable(this.parseVariable(varName));
+            s += ` ${v} = ${this.renderKatexCell(value)}`
+            if (index !== array.length - 1) {
+              s += ',';
+            }
+          });
+          return s;
+        }
+      };
+    </script>
+  </head>
+  <body>
+    <main v-scope>
+      <div class="h-screen p-4">
+        <div class="h-full shadow-sm shadow-black rounded-md bg-base-200 border-1 border-base-content/20 p-6">
+          <div class="grid grid-cols-3 gap-6 h-full">
+            <div>
+              <div class="flex justify-between">
+                <h1 class="text-2xl font-black">Parameters</h1>
+                <button class="btn btn-primary btn-sm" @click="solve" :disabled="editTarget || (determineBaseVars === 'manual' && editBaseVars) || editSlackVar || !params.constraints.length">&rtrif; Run</button>
+              </div>
+              <div class="mt-2 flex flex-col gap-2">
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Optimization Target</legend>
+                  <div class="join w-full" v-if="editTarget">
+                    <input class="input join-item font-mono flex-grow" v-model="rawTargetText" id="target" placeholder="Expression"/>
+                    <button class="btn btn-secondary join-item" @click="updateTarget">OK</button>
+                  </div>
+                  <p class="label" v-if="editTarget">
+                    Format: 
+                    <span class="font-mono">(-)a1*var1 +/- a2*var2 ...</span>
+                  </p>
+                  <p v-else v-html="targetKatex" class="text-lg cursor-pointer" @click="editTarget = true"></p>
+                </fieldset>
+                <label class="label text-base-content font-semibold text-xs">
+                  <input type="checkbox" class="checkbox" v-model="params.maximize" @change="!editTarget && updateTarget()" name="maximize"/>
+                  Maximize target (default is minimize)
+                </label>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Constraints</legend>
+                  <ol v-if="constraintsKatex.length">
+                    <li v-for="item, index of constraintsKatex" :key="item" class="flex justify-between">
+                      <p class="text-lg" v-html="item"></p>
+                      <button class="btn btn-xs btn-soft btn-error" @click="removeConstraint(index)">&times; delete</button>
+                    </li>
+                  </ol>
+                  <div class="join w-full">
+                    <input class="input join-item font-mono flex-grow" v-model="rawConstraintText" id="constraint" placeholder="Constraint"/>
+                    <button class="btn btn-secondary join-item" @click="addConstraint">Add</button>
+                  </div>
+                  <p class="label">
+                    Format:
+                    <span class="font-mono">(-)a1*var1 +/- a2*var2 ... &lt;=/==/&gt;= rhs</span>
+                  </p>
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Determine Base Variables...</legend>
+                  <label class="label">
+                    <input type="radio" name="d-basevars" value="auto" v-model="determineBaseVars"/>
+                    Automatically (based on slack variables)
+                  </label>
+                  <label class="label">
+                    <input type="radio" name="d-basevars" value="two-phase" v-model="determineBaseVars"/>
+                    With Two-Phase Algorithm
+                  </label>
+                  <label class="label">
+                    <input type="radio" name="d-basevars" value="manual" v-model="determineBaseVars"/>
+                    Manually
+                  </label>
+                </fieldset>
+                <fieldset class="fieldset" v-if="determineBaseVars === 'manual'">
+                  <legend class="fieldset-legend">Base Variable List</legend>
+                  <div class="join w-full" v-if="editBaseVars">
+                    <input class="input join-item font-mono flex-grow" v-model="rawBaseVarsText" id="basevars" placeholder="Variable List"/>
+                    <button class="btn btn-secondary join-item" @click="updateBaseVars">OK</button>
+                  </div>
+                  <p class="label" v-if="editBaseVars">
+                    Format: 
+                    <span class="font-mono">var1, var2, ...</span>
+                  </p>
+                  <p v-else v-html="baseVarsKatex" class="text-lg cursor-pointer" @click="editBaseVars = true"></p>
+                </fieldset>
+                <label class="label text-base-content font-semibold text-xs">
+                  <input type="checkbox" class="checkbox" v-model="params.showCanonicalization" name="show-canon"/>
+                  Display Canonicalization
+                </label>
+                <label class="label text-base-content font-semibold text-xs">
+                  <input type="checkbox" class="checkbox" v-model="params.yieldInitialTableau" name="yield-tableau-0"/>
+                  Include Tableau 0
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Slack Variable Starts From...</legend>
+                    <div class="join w-full" v-if="editSlackVar">
+                      <input class="input join-item font-mono flex-grow" v-model="rawSlackVarText" id="slackvar" placeholder="Variable"/>
+                      <button class="btn btn-secondary join-item" @click="updateSlackVar">OK</button>
+                    </div>
+                    <p v-else v-html="slackVarKatex" class="text-lg cursor-pointer" @click="editSlackVar = true"></p>
+                  </fieldset>
+                  <fieldset class="fieldset" v-show="params.needsTwoPhase">
+                    <legend class="fieldset-legend">Artificial Variable Prefix</legend>
+                    <input class="input font-mono w-full" v-model="params.artificialVariablePrefix" id="avar" placeholder="Prefix"/>
+                  </fieldset>
+                </div>
+              </div>
+            </div>
+            <div class="col-span-2 h-full flex flex-col overflow-y-auto">
+              <h1 class="text-2xl font-black">Output</h1>
+              <p class="mt-2 text-error font-mono" v-if="showOutput && error">
+                {{ error }}
+              </p>
+              <div v-if="showOutput && result" class="mt-2 flex flex-col gap-2 flex-grow overflow-y-auto">
+                <p class="text-lg font-light text-base-content/50" v-if="result.slackVariableCount !== null">
+                  Canonicalization
+                </p>
+                <p class="text-sm font-bold indent-5" v-if="result.slackVariableCount !== null">
+                  {{ result.slackVariableCount }} slack variables used:
+                </p>
+                <ol v-if="result.canonicalConstraints" class="indent-5">
+                  <li v-for="constraint of result.canonicalConstraints" v-html="renderServerConstraint(constraint)"></li>
+                </ol>
+                <p class="text-lg font-light text-base-content/50" v-if="result.twoPhaseSteps">
+                  Two-Phase Steps
+                </p>
+                <ol v-if="result.twoPhaseSteps" class="flex flex-col gap-4">
+                  <li v-for="step, index of result.twoPhaseSteps">
+                    <p class="text-sm font-bold mb-2 indent-5">
+                      Step {{ lastParams && lastParams.yieldInitialTableau ? index : index + 1 }}:&nbsp;
+                      <span v-html='step.enter ? renderServerVariable(step.enter) : "none"'></span> enters,
+                      <span v-html='step.leave ? renderServerVariable(step.leave) : "none"'></span> leaves
+                    </p>
+                    <div data-tableau v-html="renderServerTableau(step.tableau)" class="max-w-4/5 rounded-box border border-base-content/10 bg-base-100 ml-5"></div>
+                    <button class="btn btn-primary btn-soft ml-5 btn-xs mt-2" @click="doCopy($el, renderServerTableauKatex(step.tableau))">Copy LaTeX</button>
+                    <button class="btn btn-secondary btn-soft ml-1 btn-xs mt-2" @click="doCopy($el, renderServerTableauTypst(step.tableau))">Copy Typst</button>
+                  </li>
+                </ol>
+                <p class="text-lg font-light text-base-content/50" v-if="result.feasibleResult">
+                  Feasible Solution
+                </p>
+                <p v-html="renderServerResult(result.feasibleResult)" v-if="result.feasibleResult" class="indent-5"></p>
+                <p class="text-sm font-bold indent-5" v-if="result.feasibleResult">
+                  Base Variables:&nbsp;
+                  <span v-html="renderServerVariableList(result.feasibleResult.baseVariables)"></span>
+                </p>
+                <p class="text-lg font-light text-base-content/50" v-if="result.feasibleResult">
+                  Useless Constraints
+                </p>
+                <ol v-if="result.feasibleResult && result.feasibleResult.extraData.removedConstraints.length" class="indent-5">
+                  <li v-for="constraint of result.feasibleResult.extraData.removedConstraints" v-html="renderServerConstraint(constraint)"></li>
+                </ol>
+                <p v-if="result.feasibleResult && !result.feasibleResult.extraData.removedConstraints.length" class="text-sm font-bold indent-5">
+                  None.
+                </p>
+                <p class="text-lg font-light text-base-content/50" v-if="result.solveSteps">
+                  Simplex Steps
+                </p>
+                <ol v-if="result.solveSteps" class="flex flex-col gap-4">
+                  <li v-for="step, index of result.solveSteps">
+                    <p class="text-sm font-bold mb-2 indent-5">
+                      Step {{ lastParams && lastParams.yieldInitialTableau ? index : index + 1 }}:&nbsp;
+                      <span v-html='step.enter ? renderServerVariable(step.enter) : "none"'></span> enters,
+                      <span v-html='step.leave ? renderServerVariable(step.leave) : "none"'></span> leaves
+                    </p>
+                    <div data-tableau v-html="renderServerTableau(step.tableau)" class="max-w-4/5 rounded-box border border-base-content/10 bg-base-100 ml-5"></div>
+                    <button class="btn btn-primary btn-soft ml-5 btn-xs mt-2" @click="doCopy($el, renderServerTableauKatex(step.tableau))">Copy LaTeX</button>
+                    <button class="btn btn-secondary btn-soft ml-1 btn-xs mt-2" @click="doCopy($el, renderServerTableauTypst(step.tableau))">Copy Typst</button>
+                  </li>
+                </ol>
+                <p class="text-lg font-light text-base-content/50" v-if="result.bestResult">
+                  Best Solution
+                </p>
+                <p v-html="renderServerResult(result.bestResult)" v-if="result.bestResult" class="indent-5"></p>
+                <p class="text-sm font-bold indent-5" v-if="result.bestResult">
+                  Base Variables:&nbsp;
+                  <span v-html="renderServerVariableList(result.bestResult.baseVariables)"></span>
+                </p>
+                <p class="text-lg font-light text-error/50" v-if="!result.ok">
+                  Error: {{ result.error }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script src="https://unpkg.com/petite-vue"></script>
+    <script>
+      PetiteVue.createApp({
+        rawTargetText: '',
+        targetKatex: '',
+        editTarget: true,
+
+        rawConstraintText: '',
+        constraintsKatex: [],
+
+        _determineBaseVars: 'auto',
+        get determineBaseVars() {
+          return this._determineBaseVars;
+        },
+        set determineBaseVars(value) {
+          this._determineBaseVars = value;
+          this.params.needsTwoPhase = (value === 'two-phase');
+          if (value !== 'manual') {
+            this.rawBaseVarsText = '';
+            this.baseVarsKatex = '';
+            this.editBaseVars = true;
+          }
+        },
+        rawBaseVarsText: '',
+        baseVarsKatex: '',
+        editBaseVars: true,
+
+        rawSlackVarText: '',
+        slackVarKatex: '',
+        editSlackVar: true,
+
+        params: {
+          target: {},
+          constraints: [],
+          maximize: false,
+          baseVariables: null,
+          needsTwoPhase: false,
+          slackVariableStart: '',
+          artificialVariablePrefix: 'u',
+          showCanonicalization: false,
+          yieldInitialTableau: true,
+          precision: null,
+        },
+
+        lastParams: null,
+
+        showOutput: false,
+        error: null,
+        result: null,
+
+        updateTarget() {
+          if (!this.rawTargetText.length) return;
+          try {
+            const { coefs, vars } = Sapro.parseExpression(this.rawTargetText);
+            this.params.target = coefs;
+            const expr = Sapro.renderKatexExpression(coefs, vars, this.params.maximize);
+            this.targetKatex = katex.renderToString(expr);
+            this.editTarget = false;
+          }
+          catch (e) {
+            const input = document.querySelector('#target');
+            input.setCustomValidity(`${e}`);
+            input.reportValidity();
+          }
+        },
+
+        addConstraint() {
+          if (!this.rawConstraintText.length) return;
+          try {
+            const { constraint, vars } = Sapro.parseConstraint(this.rawConstraintText);
+            this.params.constraints.push(constraint);
+            const expr = Sapro.renderKatexConstraint(constraint, vars)
+            this.constraintsKatex.push(katex.renderToString(expr));
+            this.rawConstraintText = '';
+          }
+          catch (e) {
+            const input = document.querySelector('#constraint');
+            input.setCustomValidity(`${e}`);
+            input.reportValidity();
+          }
+        },
+
+        removeConstraint(index) {
+          this.params.constraints.splice(index, 1);
+          this.constraintsKatex.splice(index, 1);
+        },
+
+        updateBaseVars() {
+          if (!this.rawBaseVarsText.length) return;
+          try {
+            const { raw, vars } = Sapro.parseVariableList(this.rawBaseVarsText);
+            this.params.baseVariables = raw;
+            const expr = Sapro.renderKatexVariableList(vars);
+            this.baseVarsKatex = katex.renderToString(expr);
+            this.editBaseVars = false;
+          }
+          catch (e) {
+            const input = document.querySelector('#basevars');
+            input.setCustomValidity(`${e}`);
+            input.reportValidity();
+          }
+        },
+
+        updateSlackVar() {
+          if (!this.rawSlackVarText.length) return;
+          try {
+            const v = Sapro.parseVariable(this.rawSlackVarText);
+            this.params.slackVariableStart = this.rawSlackVarText.trim();
+            const expr = Sapro.renderKatexVariable(v);
+            this.slackVarKatex = katex.renderToString(expr);
+            this.editSlackVar = false;
+          }
+          catch (e) {
+            const input = document.querySelector('#slackvar');
+            input.setCustomValidity(`${e}`);
+            input.reportValidity();
+          }
+        },
+
+        solve() {
+          this.result = null;
+          this.error = null;
+          this.showOutput = false;
+          const payload = JSON.stringify(this.params);
+          fetch('/', {
+            method: 'POST',
+            body: payload,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }).then(response => {
+            if (response.status != 200) {
+              this.error = `Error sending request: ${response.status} ${response.statusText}`;
+              this.showOutput = true;
+            }
+            else {
+              response.json().then(data => {
+                this.lastParams = { ...this.params };
+                this.result = data;
+                this.showOutput = true;
+              });
+            }
+          })
+        },
+
+        renderServerConstraint(constraint) {
+          const vars = Object.fromEntries(
+            Object.getOwnPropertyNames(constraint.coefficients)
+              .map(v => [v, Sapro.parseVariable(v)])
+          );
+          const expr = Sapro.renderKatexConstraint(constraint, vars);
+          return katex.renderToString(expr);
+        },
+
+        renderServerTableauKatex(tableau) {
+          return Sapro.renderKatexTableau(tableau);
+        },
+
+        renderServerTableauTypst(tableau) {
+          return Sapro.renderTypstTableau(tableau);
+        },
+
+        renderServerTableau(tableau) {
+          return Sapro.renderHTMLTableau(tableau);
+        },
+
+        renderServerVariable(v) {
+          return katex.renderToString(Sapro.renderKatexVariable(Sapro.parseVariable(v)));
+        },
+
+        renderServerResult(result) {
+          return katex.renderToString(Sapro.renderKatexResult(result));
+        },
+
+        renderServerVariableList(list) {
+          const expr = Sapro.renderKatexVariableList(list.map(v => Sapro.parseVariable(v)));
+          return katex.renderToString(expr);
+        },
+
+        doCopy(el, value) {
+          navigator.clipboard.writeText(value)
+            .then(() => {
+              const originalText = el.textContent;
+              el.textContent = 'Copied!';
+              setTimeout(() => {
+                el.textContent = originalText;
+              }, 2000);
+            })
+        },
+      }).mount()
+    </script>
+  </body>
+</html>
