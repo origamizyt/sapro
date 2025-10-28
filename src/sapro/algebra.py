@@ -90,7 +90,13 @@ class Variable:
     def __ge__(self, other: Any):
         return 1 * self >= other
     def __eq__(self, other: Any):
+        if isinstance(other, Variable):
+            return self.name == other.name
         return 1 * self == other
+    def __ne__(self, other: Any):
+        if isinstance(other, Variable):
+            return self.name != other.name
+        return NotImplemented
 
 def _format_coefficient(var: Variable, coef: Real, first: bool):
     if coef == 1:

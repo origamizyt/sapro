@@ -7,7 +7,7 @@
 
 Install via PyPI:
 ```
-$ pip install sapro==0.2.3b1
+$ pip install sapro
 ```
 
 ## CLI Usage

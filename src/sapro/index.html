@@ -40,6 +40,15 @@
             return parseFloat(s);
           }
         },
+        negate(n) {
+          if (Object.hasOwn(n, fraction)) {
+            const [num, denom] = n[fraction];
+            const negated = new Number(-n);
+            negated[fraction] = [-num, denom];
+            return negated;
+          }
+          return -n;
+        },
         parseConstraint(s) {
           let parts, operator;
           if (s.includes("<=")) {
@@ -94,7 +103,7 @@
               }
               else {
                 const parsed = this.parseExprItem(part);
-                coefs[parsed.varName] = -parsed.coef;
+                coefs[parsed.varName] = this.negate(parsed.coef);
                 vars[parsed.varName] = parsed.var;
               }
             })
@@ -192,10 +201,10 @@
           if (Object.hasOwn(coef, fraction)) {
             let [num, denom] = coef[fraction];
             if (coef < 0) {
-              coefString = `-\\frac{${Math.abs(num)}}${Math.abs(denom)}`;
+              coefString = `-\\frac{${Math.abs(num)}}{${Math.abs(denom)}}`;
             }
             else {
-              coefString = `\\frac{${Math.abs(num)}}${Math.abs(denom)}`;
+              coefString = `\\frac{${Math.abs(num)}}{${Math.abs(denom)}}`;
             }
           }
           if (coef === 1) {
@@ -282,7 +291,7 @@
           let n = tableau[0].length - 2; // VARS, ...n, SIGMA
           let s = 
             `#table(\n` +
-            `  columns: ${n},\n` +
+            `  columns: (1fr,) * ${n + 2},\n` +
             `  table.header(`;
           s += tableau[0].map((value, index, array) => {
             if (index === 0 || index === array.length - 1) {
