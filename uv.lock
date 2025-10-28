@@ -398,7 +398,7 @@ wheels = [
 
 [[package]]
 name = "sapro"
-version = "0.2.3a1"
+version = "0.2.3b1"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "1.16.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.5'" },

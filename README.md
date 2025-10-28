@@ -7,12 +7,12 @@
 
 Install via PyPI:
 ```
-$ pip install sapro
+$ pip install sapro==0.2.3b1
 ```
 
 ## CLI Usage
 
-`sapro` expores a command-line interface.
+`sapro` exposes a command-line interface.
 ```
 $ sapro solve --max x1+2*x2 \
     -c"x1+x2<=4" \
