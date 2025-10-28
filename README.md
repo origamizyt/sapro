@@ -22,7 +22,7 @@ $ sapro solve --max x1+2*x2 \
 z = 7 when x1 = 1, x2 = 3, x3 = 0, x4 = 0, x5 = 2
 ```
 
-Run `python -m sapro solve -h` for more info.
+Run `sapro solve -h` for more info.
 
 ## GUI Usage
 
@@ -37,7 +37,7 @@ Open `http://localhost:5678` in your browser to use the interface.
 
 To use a custom host and port, specify the `-H` and `-p` arguments:
 ```
-$ python -m sapro -H 127.0.0.1 -p 8080
+$ sapro webui -H 127.0.0.1 -p 8080
 ```
 
 ## API Usage
