@@ -1,4 +1,6 @@
+from fractions import Fraction
 from io import StringIO
+from numbers import Real
 from string import ascii_uppercase
 from typing import Any, Callable, Mapping, TypeVar
 from types import GenericAlias, UnionType, NoneType
@@ -10,7 +12,7 @@ try:
 except ImportError:
     _supports_Required = False
 
-__all__ = ['Transform', 'DataParcel', 'Parcelable', 'JSONConverter', 'parse_variable']
+__all__ = ['Transform', 'DataParcel', 'Parcelable', 'JSONConverter', 'ftoa', 'parse_variable']
 
 Transform = Callable[[Any, 'Registry'], Any]
 Registry = Mapping['TypeLike', Transform]
@@ -540,6 +542,32 @@ class JSONConverter:
         '''
         obj = json.loads(s, **kwargs)
         return cls.decode(obj, value_type, temporary_decoders)
+
+def ftoa(n: Real, precision: int | None, plus_sign: bool = False) -> str:
+    '''
+    Formats a floating-point number to string.
+
+    Parameters
+    ----------
+    n:
+        The number to format.
+    precision:
+        Number of digits after the floating point.
+        If `None` or negative, fractions will be used.
+    
+    Returns
+    -------
+    s:
+        The formatted string.
+    '''
+    if precision is not None and precision >= 0:
+        return format(n, (plus_sign * '+') + f'.{precision}g')
+    else:
+        n = Fraction(n).limit_denominator()
+        if n >= 0 and plus_sign:
+            return '+' + str(n)
+        else:
+            return str(n)
 
 def parse_variable(value: str, default: str | None) -> tuple[str, int]:
     '''

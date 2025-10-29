@@ -1,12 +1,12 @@
 [project]
 name = "sapro"
-version = "0.3.0"
+version = "0.4.0b1"
 description = "Solve linear programming problems using simplex algorithm."
 readme = "README.md"
 authors = [
     { name = "origamizyt", email = "zhaoyitong18@163.com" }
 ]
-requires-python = ">=3"
+requires-python = ">=3.10"
 dependencies = [
     "numpy",
 ]

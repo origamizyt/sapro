@@ -76,7 +76,7 @@ class SolveResult:
     ok: bool
     error: LPError | None
     slack_variable_count: int | None
-    canonical_constraints: list[Constraint] | None
+    canonical_constraints: list[FormattedConstraint] | None
     two_phase_steps: list[LPStep] | None
     solve_steps: list[LPStep] | None
     feasible_result: LPResult | None
@@ -133,7 +133,7 @@ def application(environ, start_response):
     try:
         if params.show_canonicalization:
             result.slack_variable_count = problem.canonicalize()
-            result.canonical_constraints = problem.constraints.copy()
+            result.canonical_constraints = problem.format_constraints(params.precision)
         if params.base_variables:
             problem.set_base_vars(params.base_variables)
         if params.needs_two_phase:
@@ -182,5 +182,6 @@ def run_app(host: str = '0.0.0.0', port: int = 80):
                               formatted_target_value=str,
                               formatted_variable_values=dict[Variable, str])
     Parcelable.mark_typeddict(ExtraData)
+    Parcelable.mark_typeddict(FormattedConstraint)
     server = make_server(host, port, application)
     server.serve_forever()

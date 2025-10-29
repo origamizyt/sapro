@@ -1,4 +1,5 @@
 from .algebra import Variable
+from .utils import ftoa
 from fractions import Fraction
 from io import StringIO
 from typing import Any, Sequence
@@ -114,33 +115,6 @@ class Tableau:
         self.variables = vs
         self.bases = bvs
         self.precision = precision
-    def _to_string(self, n: Any, plus_sign: bool = False) -> str:
-        '''
-        Converts an object to string using `self.precision`.
-
-        Parameters
-        ----------
-        n:
-            The object to convert.
-            If numeric, use `self.precision`.
-        plus_sign:
-            If `True`, adds a `+` sign if greater than 0.
-        
-        Returns
-        -------
-        string:
-            A string representation of `n`.
-        '''
-        if isinstance(n, (int, float)):
-            if self.precision is not None and self.precision >= 0:
-                return format(n, (plus_sign * '+') + f'.{self.precision}g')
-            else:
-                n = Fraction(n).limit_denominator()
-                if n >= 0 and plus_sign:
-                    return '+' + str(n)
-                else:
-                    return str(n)
-        return str(n)
     def to_frame(self) -> list[list[str]]:
         '''
         Converts this object to a 2-D array of formatted strings.
@@ -152,19 +126,19 @@ class Tableau:
         '''
         data = [
             ['BV'] + 
-            list(map(self._to_string, self.variables)) + 
+            list(map(str, self.variables)) + 
             ['RHS'],
         ]
         for i, row in enumerate(self.data):
             data.append(
-                [self._to_string(self.bases[i])] + 
-                list(map(self._to_string, row)) + 
-                [self._to_string(self.rhs[i])]
+                [str(self.bases[i])] + 
+                [ftoa(item, self.precision) for item in row] + 
+                [ftoa(self.rhs[i], self.precision)]
             )
         data.append(
             [''] + 
-            list(map(self._to_string, self.sigma)) + 
-            [f'z{self._to_string(self.z, True)}']
+            [ftoa(item, self.precision) for item in self.sigma] + 
+            [f'z{ftoa(self.z, self.precision, True)}']
         )
         return data
     def display(self, sep: str = '-') -> str:

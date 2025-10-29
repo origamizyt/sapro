@@ -509,10 +509,10 @@
                 <p class="text-lg font-light text-base-content/50" v-if="result.feasibleResult">
                   Useless Constraints
                 </p>
-                <ol v-if="result.feasibleResult && result.feasibleResult.extraData.removedConstraints.length" class="indent-5">
-                  <li v-for="constraint of result.feasibleResult.extraData.removedConstraints" v-html="renderServerConstraint(constraint)"></li>
+                <ol v-if="result.feasibleResult && result.feasibleResult.extraData.formattedRemovedConstraints.length" class="indent-5">
+                  <li v-for="constraint of result.feasibleResult.extraData.formattedRemovedConstraints" v-html="renderServerConstraint(constraint)"></li>
                 </ol>
-                <p v-if="result.feasibleResult && !result.feasibleResult.extraData.removedConstraints.length" class="text-sm font-bold indent-5">
+                <p v-if="result.feasibleResult && !result.feasibleResult.extraData.formattedRemovedConstraints.length" class="text-sm font-bold indent-5">
                   None.
                 </p>
                 <p class="text-lg font-light text-base-content/50" v-if="result.solveSteps">
@@ -531,7 +531,7 @@
                   </li>
                 </ol>
                 <p class="text-lg font-light text-base-content/50" v-if="result.bestResult">
-                  Best Solution
+                  Optimal Solution
                 </p>
                 <p v-html="renderServerResult(result.bestResult)" v-if="result.bestResult" class="indent-5"></p>
                 <p class="text-sm font-bold indent-5" v-if="result.bestResult">
@@ -539,7 +539,7 @@
                   <span v-html="renderServerVariableList(result.bestResult.baseVariables)"></span>
                 </p>
                 <p class="text-lg font-light text-error/50" v-if="!result.ok">
-                  Error({{ result.error.type }}): {{ result.error.message }}
+                  Error({{ result.error.type }}): <span v-html="renderServerErrorMessage(result.error)"></span>
                 </p>
               </div>
             </div>
@@ -667,8 +667,6 @@
         },
 
         solve() {
-          this.result = null;
-          this.error = null;
           this.showOutput = false;
           const payload = JSON.stringify(this.params);
           fetch('/', {
@@ -693,11 +691,18 @@
         },
 
         renderServerConstraint(constraint) {
+          const coefs = Object.fromEntries(
+            Object.entries(constraint.coefficients).map(([varName, coef]) => [varName, Sapro.parseFloat(coef)])
+          );
           const vars = Object.fromEntries(
             Object.getOwnPropertyNames(constraint.coefficients)
               .map(v => [v, Sapro.parseVariable(v)])
           );
-          const expr = Sapro.renderKatexConstraint(constraint, vars);
+          const expr = Sapro.renderKatexConstraint({
+            coefficients: coefs,
+            rhs: Sapro.parseFloat(constraint.rhs),
+            operator: constraint.operator
+          }, vars);
           return katex.renderToString(expr);
         },
 
@@ -724,6 +729,20 @@
         renderServerVariableList(list) {
           const expr = Sapro.renderKatexVariableList(list.map(v => Sapro.parseVariable(v)));
           return katex.renderToString(expr);
+        },
+
+        renderServerErrorMessage(error) {
+          if (error.type === 'Unsolvable') {
+            const quoted = /"(.+?)"/.exec(error.message);
+            if (quoted !== null) {
+              const expr = Sapro.renderKatexVariable(Sapro.parseVariable(quoted[1]));
+              const latex = katex.renderToString(expr);
+              return error.message.slice(0, quoted.index) + 
+                latex + 
+                error.message.slice(quoted.index + 2 + quoted[1].length)
+            }
+          }
+          return error.message;
         },
 
         doCopy(el, value) {

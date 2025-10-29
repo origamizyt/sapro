@@ -1,14 +1,25 @@
-from .error import *
+from numbers import Real
 from .algebra import *
+from .error import *
 from .tableau import Tableau
+from .utils import ftoa
 from dataclasses import dataclass
 from io import StringIO
-from fractions import Fraction
-from numbers import Real
-from typing import Any, Sequence, Iterator, Generator, TypedDict
+from typing import Sequence, Iterator, Generator, TypedDict
 import numpy as np
 
-__all__ = ['LPStep', 'ExtraData', 'LPResult', 'Simplex']
+__all__ = ['LPStep', 'ExtraData', 'LPResult', 'FormattedConstraint', 'Simplex']
+
+class FormattedConstraint(TypedDict):
+    '''
+    Represents a formatted constraint as in `Simplex.format_constraints`.
+    '''
+    coefficients: dict[Variable, str]
+    'Variable -> coefficient mapping.'
+    rhs: str
+    'Right-hand side value.'
+    operator: OperatorType
+    'Operator (eq, le, ge).'
 
 @dataclass
 class LPStep:
@@ -26,6 +37,8 @@ class ExtraData(TypedDict, total=False):
 
     removed_constraints: list[Constraint]
     'Removed constraints in two-phase algorithm.'
+    formatted_removed_constraints: list[FormattedConstraint]
+    'Formatted version of `removed_constraints`.'
 
 @dataclass
 class LPResult:
@@ -50,7 +63,7 @@ class LPResult:
         -------
         A formatted version of `self.target_value`.
         '''
-        return self._to_string(self.target_value)
+        return ftoa(self.target_value, self.precision)
     @property
     def formatted_variable_values(self) -> dict[Variable, str]:
         '''
@@ -60,28 +73,7 @@ class LPResult:
         -------
         A dictionary like `self.variable_values`, but with every value formatted.
         '''
-        return dict(map(lambda kv: (kv[0], self._to_string(kv[1])), self.variable_values.items()))
-    def _to_string(self, n: Any) -> str:
-        '''
-        Converts an object to string using `self.precision`.
-
-        Parameters
-        ----------
-        n:
-            The object to convert.
-            If numeric, use `self.precision`.
-        
-        Returns
-        -------
-        string:
-            A string representation of `n`.
-        '''
-        if isinstance(n, Real):
-            if self.precision is not None and self.precision >= 0:
-                return format(n, f'.{self.precision}g')
-            else:
-                return str(Fraction(n).limit_denominator())
-        return str(n)
+        return { var: ftoa(value, self.precision) for var, value in self.variable_values.items() }
     def display(self) -> str:
         '''
         Converts this object to a readable format.
@@ -93,12 +85,12 @@ class LPResult:
             Format: `{target_value} when {var_name} = {var_value}, ...`
         '''
         result = StringIO()
-        result.write(self._to_string(self.target_value))
+        result.write(ftoa(self.target_value, self.precision))
         result.write(' when ')
         for var, value in self.variable_values.items():
-            result.write(self._to_string(var))
+            result.write(str(var))
             result.write(' = ')
-            result.write(self._to_string(value))
+            result.write(ftoa(value, self.precision))
             result.write(', ')
         return result.getvalue().rstrip(', ')
     def __str__(self):
@@ -292,6 +284,29 @@ class Simplex:
                 c.canonicalize(v)
                 self.variables.append(v)
         return self._num_slack_vars
+    def format_constraints(self, precision: int | None = None) -> list[FormattedConstraint]:
+        '''
+        Formats the coefficients in constraints.
+
+        Parameters
+        ----------
+        precision:
+            Number of digits after the floating point.
+            If `None` or negative, fractions will be used.
+        
+        Returns
+        -------
+        formatted_constraints:
+            The formatted constraints.
+        '''
+        return [
+            {
+                "coefficients": { var: ftoa(coef, precision) for var, coef in c.coefficients.items() },
+                "rhs": ftoa(c.rhs, precision),
+                "operator": c.operator
+            }
+            for c in self.constraints
+        ]
     def _prepare(self, need_base_vars: bool):
         '''
         Prepares for simplex iterations.
@@ -309,10 +324,12 @@ class Simplex:
         M = len(self.constraints)
         if M <= 0:
             raise Unsolvable('constraints is empty')
+        if not need_base_vars:
+            return
         if self.base_vars is None:
             if self._num_slack_vars == M:
                 self.base_vars = self.variables[-M:]
-            elif need_base_vars:
+            else:
                 raise InvalidBase('cannot determine base variables')
         elif len(self.base_vars) != len(self.constraints):
             raise InvalidBase('number of base variables doesn\'t match number of constraints')
@@ -507,7 +524,7 @@ class Simplex:
                 raise Boundless("encountered cycle in simplex")
             base_var_memo.add(base_var_set)
         
-        if (rhs < 0).any():
+        if not np.isclose(z, 0) or (rhs < 0).any():
             raise Unsolvable('cannot find feasible solution')
 
         removed_constraints = []
@@ -538,6 +555,14 @@ class Simplex:
             base_variables=base_vars.copy(),
             extra_data={
                 'removed_constraints': removed_constraints,
+                'formatted_removed_constraints': [
+                    {
+                        "coefficients": { var: ftoa(coef, precision) for var, coef in c.coefficients.items() },
+                        "rhs": ftoa(c.rhs, precision),
+                        "operator": c.operator
+                    }
+                    for c in removed_constraints
+                ]
             }
         )
 
