@@ -7,7 +7,7 @@
 
 Install via PyPI:
 ```
-$ pip install sapro==0.4.0b1
+$ pip install sapro==0.4.1b1
 ```
 
 ## CLI Usage
@@ -143,7 +143,7 @@ The intrinsic bounds $x_i \ge 0$ always take effect. You don't need to explicitl
 
 To solve a LP problem using simplex, the first thing to do is to determine the *base variables*. There are three ways to do this:
 
--   Select *slack variables* as base. This would be the most straightforward way for problems whose constraints are all **inequations**. After adding slack variables, their coefficient in the constraints are naturally 1 or -1, which composes a inversible matrix.
+-   Select *slack variables* as base. This would be the most straightforward way for problems whose constraints are all **inequations**. After adding slack variables, their coefficient in the constraints are naturally 1 or -1, which composes an inversible matrix.
     
     No code is needed to use this method, as this is the default approach used by the algorithm. But you need to make sure that there is enough slack variables for the base i.e. all constraints are inequations.
 
@@ -197,6 +197,6 @@ for i, step in enumerate(problem.solve()):
     print(step.tableau)
 ```
 
-If you pass `yield_initial_tableau=True` to either of the two methods, then an table containing the initial data will be yielded, before any variable has entered / left the base.
+If you pass `yield_initial_tableau=True` to either of the two methods, then a table containing the initial data will be yielded, before any variable has entered / left the base.
 
 For more detailed usage, refer to the in-code documentations.

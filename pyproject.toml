@@ -1,6 +1,6 @@
 [project]
 name = "sapro"
-version = "0.4.0b1"
+version = "0.4.1b1"
 description = "Solve linear programming problems using simplex algorithm."
 readme = "README.md"
 authors = [

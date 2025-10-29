@@ -223,10 +223,10 @@
         },
         renderKatexVariable({ prefix, index }) {
           if (index === null) {
-            return `${prefix}`;
+            return prefix;
           }
           else {
-            return `${prefix}_${index}`;
+            return `{${prefix}}_{${index}}`;
           }
         },
         renderKatexVariableList(vars) {
